@@ -11,8 +11,9 @@ import time
 from scipy import signal
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
-from matplotlib import colors
+from matplotlib import colors, lines
 # %matplotlib notebook
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from skimage import filters, measure, morphology, segmentation, util
 from skimage.filters import try_all_threshold
@@ -22,7 +23,6 @@ from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border, watershed
 from skimage.color import label2rgb, rgb2gray
 from skimage.morphology import remove_small_objects, remove_small_holes
-
 
 # Cell 4
 # The code in this cell defines functions of ALAn.
@@ -237,17 +237,25 @@ def find_shoulders(df, image, **kwargs):
 
     if plot == True or save_name != False:
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(7, 7))
-        ax.plot(slice_heights, norm_intensities_actin, 'red', label='Actin Profile')
-        ax.set_ylabel('Actin Intensity (A.U.)')
-        ax.set_xlabel('Z-Position ($\mu$m)')
+        
+        actin_line, = ax.plot(slice_heights, norm_intensities_actin, 'red', label='Actin Profile')
+        
         ax2 = ax.twinx()
-        ax.set_xlim(0, 30)
-        ax2.plot(slice_heights[:-1] + (z_max - z_min) / (2 * len(slice_heights)), actin_profile_derivative, 'steelblue',
-                 label='Actin Derivative')
-        ax2.set_xlabel('Z-Position ($\mu$m)')
-        ax2.set_ylabel('Actin Profile 1$^{st}$ Derivative (A.U. / $\mu$m)')
+        derivative_line, = ax2.plot(slice_heights[:-1] + (z_max - z_min) / (2 * len(slice_heights)), actin_profile_derivative, 'steelblue', label='Actin Derivative')
+        
         ax.axvline(x=min_layer_height, c='k', linestyle='--', label='Layer Bounds')
         ax.axvline(x=max_layer_height, c='k', linestyle='--')
+
+        # Combine legends from both axes
+        handles, labels = ax.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(handles=handles + handles2, labels=labels + labels2, loc='upper right', prop={'size': 14})
+
+        ax.set_ylabel('Actin Intensity (A.U.)')
+        ax.set_xlabel('Z-Position ($\mu$m)')
+        ax.set_xlim(0, 30)
+        ax2.set_ylabel('Actin Profile 1$^{st}$ Derivative (A.U. / $\mu$m)', labelpad=10)
+
         fig.tight_layout()
         fig.show()
         if save_name != False:
@@ -364,34 +372,47 @@ def nuclei_distribution(df, image, **kwargs):
 
     if (plot == True or save_name != False):
         fig, ax = plt.subplots()
-        ax.scatter(bins[:-1], counts_to_fit, label='Nuclear Position')
+
+        scatter_plot = ax.scatter(bins[:-1], counts_to_fit, label='Nuclear Position')
         if peaks == 1:
             ax.plot(bins_fit, fit_single, label='Single Gaussian Fit')
         elif peaks == 2:
             ax.plot(bins_fit, fit_double, label='Double Gaussian Fit')
-        else:
+        else: 
             return 'peaks suck'
 
-        ax.legend(loc='upper right')
-        ax.set_ylabel('Number of nuclei')
-        ax.set_xlabel('Z Position ($\mu$m)')
-        ax.set_xlim(0, 30)
+        # Create a secondary y-axis for Actin Intensity
         ax2 = ax.twinx()
-        ax2.plot(slice_heights, norm_intensities_actin, c='r')
-        ax2.set_ylabel('Actin Intensity (A.U.)')
+        actin_line, = ax2.plot(slice_heights, norm_intensities_actin, c='r', label='Actin Intensity')
         ax2.axvline(x=min_layer_height, c='k', linestyle='--', label='Layer Bounds')
         ax2.axvline(x=max_layer_height, c='k', linestyle='--')
         ax2.axvline(x=actin_peak, c='k', linestyle='--')
-        print(min_layer_height, max_layer_height)
+
+        # Combine legends from both axes
+        handles, labels = ax.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(handles=handles + handles2, labels=labels + labels2, loc='upper right')
+
+        ax.set_ylabel('Number of nuclei')
+        ax.set_xlabel('Z Position ($\mu$m)')
+        ax.set_xlim(0, 30)
+        ax2.set_ylabel('Actin Intensity (A.U.)', labelpad=10)  # Adjust labelpad to move label closer
+
+        # Adjust layout to ensure everything fits
+        fig.tight_layout()
+        
         fig.show
+
+
+
         if save_name != False:
             plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
 
     return nuclear_peak, layer
 
-
 def terrain_map(df, image, **kwargs):
     color = kwargs.get('color', 'magma_r')
+    colorbar = kwargs.get('colorbar', False)
     save_name = kwargs.get('save_name', False)
     invert = kwargs.get('invert', False)
     df_cleared = clear_debris(df)
@@ -404,76 +425,42 @@ def terrain_map(df, image, **kwargs):
     vols = df_cleared['vol'].values
     cross_sections = np.pi * (np.cbrt(vols * 3 / (4 * np.pi))) ** 2
     fig, ax = plt.subplots(figsize=(5, 5))
-    ax.scatter(xs, -ys, s=cross_sections / 2, c=zs, cmap=color, vmin=bottom, vmax=bottom + 20)
+
+    # Normalize zs to be between 0 and 1 if necessary
+    if np.min(zs) != np.max(zs):
+        zs_normalized = (zs - np.min(zs)) / (np.max(zs) - np.min(zs))
+    else:
+        zs_normalized = zs  # If all values are the same, normalization will be trivial
+
+
+    # Scatter plot with normalized zs
+    im = ax.scatter(xs, -ys, s=cross_sections / 2, c=zs_normalized, cmap=color, vmin=0, vmax=1)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_xlim([0, x_max - x_min])
     ax.set_ylim([-(y_max - y_min), 0])
+    ax.set_aspect('equal')
+    
+    if (colorbar == True):
+        divider = make_axes_locatable(ax)
+        cbar_ax = divider.append_axes("right", size="5%", pad=0.1) 
+    
+        cbar = plt.colorbar(im, cax=cbar_ax)
+    
+        cbar.set_label('Relative Height', labelpad=-0.5)  
+    
+        cbar.set_ticks([0, 1])
+    
+        plt.subplots_adjust(right=0.85)
+
+
+    
+
     if save_name != False:
         plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
+    
+    plt.show()
     return
-
-# Error with unspecified variable
-'''
-def z_projection_with_cutoffs(df, image, **kwargs):
-    section = kwargs.get('section', (False, False, False, False))
-    invert = kwargs.get('invert', False)
-    bottom, top, left, right = section
-    plot = kwargs.get('plot', False)
-    save_name = kwargs.get('save_name', False)
-    actin_channel = kwargs.get('actin_channel', 1)
-
-    x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
-    min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(df, image,
-                                                                                                              actin_channel=actin_channel,
-                                                                                                              invert=invert,
-                                                                                                              section=section)
-    df_cleared = clear_debris(df)
-
-    density = len(df_cleared) / (x_max - x_min) ** 2 * 1000
-    if density <= 2:
-        bot_cutoff = 0.5
-        top_cutoff = 0.6
-    elif density >= 6:
-        bot_cutoff = 0.2
-        top_cutoff = 0.8
-    else:
-        bot_cutoff = 0.5 - 0.3 * (density - 2) / 4
-        top_cutoff = 0.6 + 0.2 * (density - 2) / 4
-    print(density, bot_cutoff, top_cutoff)
-    min_actin_slice = np.argwhere(norm_intensities_actin >= bot_cutoff)[0][0]
-    max_actin_slice = np.argwhere(norm_intensities_actin >= top_cutoff)[-1][0]
-    actin_peak_slice = np.argwhere(norm_intensities_actin == 1)[0][0]
-
-    if plot == True and invert == True:
-        x = np.arange(512)
-        ymin = min_actin_slice * np.ones_like(x)
-        ymax = max_actin_slice * np.ones_like(x)
-        peak = actin_peak_slice * np.ones_like(x)
-        fig, ax = plt.subplots(figsize=(8, 2))
-        ax.imshow(np.sum(im[:, actin_channel, :, :], axis=2)[::-1], origin='lower', cmap='Greys') # E1 im unspecified
-        ax.plot(x, ymin, color='r')
-        ax.plot(x, ymax, color='r')
-        ax.plot(x, peak, color='r')
-        ax.plot()
-    else:
-        if plot == True and invert != True:
-            x = np.arange(512)
-            mi, ma = z_projection_with_cutoffs(df, im) # ERROR1 im unspecified
-            ymin = min_actin_slice * np.ones_like(x)
-            ymax = max_actin_slice * np.ones_like(x)
-            peak = actin_peak_slice * np.ones_like(x)
-            fig, ax = plt.subplots(figsize=(8, 2))
-            ax.imshow(np.sum(im[:, actin_channel, :, :], axis=2), origin='lower', cmap='Greys') # ERROR1 im unspecified
-            ax.plot(x, ymin, color='r')
-            ax.plot(x, ymax, color='r')
-            ax.plot(x, peak, color='r')
-    if save_name != False:
-        plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
-    print(min_actin_slice, max_actin_slice)
-
-    return min_actin_slice, max_actin_slice
-'''
 
 def layer_determination(df, image, **kwargs):
     section = kwargs.get('section', (False, False, False, False))
@@ -530,6 +517,105 @@ def layer_determination(df, image, **kwargs):
 
     return layer_classification, cells_above, cells_inside, percentage_above, cell_density
 
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import patches, colors, gridspec
+
+def sub_classify(df, image, **kwargs):
+    plot = kwargs.get('plot', False)
+    save_name = kwargs.get('save_name', False)
+    invert = kwargs.get('invert', False)
+    actin_channel = kwargs.get('actin_channel', 1)
+    image = image_shuffle(image)
+    sub_image = image[:, :, :-2, :-2].copy()
+    sampling = kwargs.get('Sampling', 'Grid')
+    df_cleared = clear_debris(df)
+    x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
+    min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(
+        df, image, actin_channel=actin_channel, invert=invert)
+    layer_classification, cells_above, cells_inside, percentage_above, cell_density = layer_determination(
+        df, image, actin_channel=actin_channel, invert=invert)
+    full_x = (x_max - x_min) * 500 / 512
+    full_y = (y_max - y_min) * 500 / 512
+
+    if sampling == 'Grid':
+        classification_counts = {'Disorganized': 0, 'Mature': 0, 'Intermediate B': 0, 'Intermediate A': 0, 'Immature': 0}
+        xs = np.linspace(x_min + full_x / 10, x_min + 9 * full_x / 10, 5)
+        ys = np.linspace(y_min + full_y / 10, y_min + 9 * full_y / 10, 5)
+        lts = np.linspace(0, 400, 5)
+        rbs = np.linspace(0, 400, 5)
+        a, b = np.meshgrid(xs, ys)
+        centers = np.vstack((a.ravel(), b.ravel())).transpose()
+        a, b = np.meshgrid(lts, rbs)
+        bounds = np.vstack((a.ravel(), b.ravel())).transpose()
+        all_sections_analyzed = []
+
+        for i in range(len(centers)):
+            section_bounds = (
+                int(bounds[i, 0]), int(bounds[i, 0] + 100),
+                int(bounds[i, 1]), int(bounds[i, 1] + 100)
+            )
+            a, b, c, d, e = layer_determination(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds)
+            f, g, h, j, k = layer_height_actin(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds)
+            all_sections_analyzed.append((a, b, c, h, layer_classification))
+            if a in classification_counts:
+                classification_counts[a] += 1
+            else:
+                raise ValueError('Unexpected classification value: {}'.format(a))
+        
+        # Prepare the heatmap data
+        plot_to_make = np.zeros((500, 500))
+        colors_map = {'Disorganized': 5, 'Mature': 4, 'Intermediate B': 3, 'Intermediate A': 2, 'Immature': 1}
+        color_list = ['orange', 'forestgreen', 'darkturquoise', 'steelblue', 'lawngreen']
+
+        for i in range(len(centers)):
+            section_bounds = (
+                int(bounds[i, 0]), int(bounds[i, 0] + 100),
+                int(bounds[i, 1]), int(bounds[i, 1] + 100)
+            )
+            classification = all_sections_analyzed[i][0]
+            if classification in colors_map:
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
+                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = colors_map[classification]
+
+        # Define the desired order for the legend
+        legend_order = ['Immature', 'Intermediate A', 'Intermediate B', 'Mature', 'Disorganized']
+        legend_colors = [color_list[list(colors_map.keys()).index(label)] for label in legend_order]
+        
+        # Plotting the heatmap
+        if plot or save_name:
+            fig = plt.figure(figsize=(12, 10))
+            gs = gridspec.GridSpec(1, 2, width_ratios=[4, 1])  # Adjust ratio as needed
+
+            # Heatmap
+            ax0 = plt.subplot(gs[0])
+            heatmap = ax0.imshow(plot_to_make, cmap=colors.ListedColormap(color_list), alpha=1, vmin=1, vmax=5)
+            ax0.set_xticks([])
+            ax0.set_yticks([])
+
+            # Legend
+            ax1 = plt.subplot(gs[1])
+            legend_patches = [patches.Patch(color=color, label=label) for label, color in zip(legend_order, legend_colors)]
+
+            # Creating legend
+            ax1.legend(handles=legend_patches, loc='upper left', fontsize=25, title='Classification', title_fontsize=25, bbox_to_anchor=(0.0, 0.9))
+            ax1.axis('off')  # Hide the axis for the legend plot
+
+            fig.tight_layout()
+            if save_name:
+                plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
+            plt.show()
+
+    elif sampling == 'Random':
+        raise NotImplementedError('Random sampling method is not yet supported.')
+    else:
+        raise ValueError('Unknown sampling method: {}'.format(sampling))
+    
+    return all_sections_analyzed
+
+
+'''
+
 
 def sub_classify(df, image, **kwargs):
     plot = kwargs.get('plot', False)
@@ -549,6 +635,7 @@ def sub_classify(df, image, **kwargs):
                                                                                                           invert=invert)
     full_x = (x_max - x_min) * 500 / 512
     full_y = (y_max - y_min) * 500 / 512
+
     if sampling == 'Grid':
         plot_to_make = np.zeros((500, 500))
         xs = np.linspace(x_min + full_x / 10, x_min + 9 * full_x / 10, 5)
@@ -560,43 +647,60 @@ def sub_classify(df, image, **kwargs):
         a, b = np.meshgrid(lts, rbs)
         bounds = np.vstack((a.ravel(), b.ravel())).transpose()
         all_sections_analyzed = []
+
         for i in range(len(centers)):
             a, b, c, d, e = layer_determination(df, image, actin_channel=actin_channel, invert=invert, section=(
             int(bounds[i, 0]), int(bounds[i, 0] + 100), int(bounds[i, 1]), int(bounds[i, 1] + 100)))
             f, g, h, j, k = layer_height_actin(df, image, actin_channel=actin_channel, invert=invert, section=(
             int(bounds[i, 0]), int(bounds[i, 0] + 100), int(bounds[i, 1]), int(bounds[i, 1] + 100)))
             all_sections_analyzed.append((a, b, c, h, layer_classification))
+
+             # Set plot values based on classification
             if a == 'Disorganized':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
-                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 5 * np.ones((100, 100))
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 5
             elif a == 'Mature':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
-                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 4 * np.ones((100, 100))
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 4
             elif a == 'Intermediate B':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
-                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 3 * np.ones((100, 100))
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 3
             elif a == 'Intermediate A':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
-                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 2 * np.ones((100, 100))
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 2
             elif a == 'Immature':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100),
-                int(bounds[i, 1]):int(bounds[i, 1] + 100)] = np.ones((100, 100))
+                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 1
             else:
-                return print('How did this mess up?')
-        cmap = colors.ListedColormap(['lawngreen', 'forestgreen', 'darkturquoise', 'steelblue', 'orange'])
-        if plot == True or save_name != False:
+                raise ValueError('Unexpected classification value: {}'.format(a))
+            
+        # Define colors and labels for legend
+        classification_colors = {
+            'Immature': 'lawngreen',
+            'Intermediate A': 'steelblue',
+            'Intermediate B': 'darkturquoise',
+            'Mature': 'forestgreen',
+            'Disorganized': 'orange'
+        }
+        if plot or save_name:
             fig, ax = plt.subplots()
-            ax.imshow(plot_to_make, cmap=cmap, alpha=1, vmin=1, vmax=5)
+            cmap = colors.ListedColormap(list(classification_colors.values()))
+            bounds = np.arange(1, 7) - 0.5
+            norm = colors.BoundaryNorm(bounds, cmap.N)
+            img = ax.imshow(plot_to_make, cmap=cmap, alpha=1, vmin=1, vmax=5)
+            
+            # Create legend handles
+            handles = [lines.Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=10,
+                                    label=label) for label, color in classification_colors.items()]
+            
             ax.set_xticks([])
             ax.set_yticks([])
-            if save_name != False:
-                plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
-    elif sampling == 'Random':
-        return print('This method is not yet supported.')
-    else:
-        return print('This method is not yet supported.')
-    return all_sections_analyzed
+            ax.legend(handles=handles, loc='upper right', fontsize=10, title='Classification')
 
+            if save_name:
+                plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
+            plt.show()
+    elif sampling == 'Random':
+        raise NotImplementedError('Random sampling method is not yet supported.')
+    else:
+        raise ValueError('Unknown sampling method: {}'.format(sampling))
+    return all_sections_analyzed
+'''
 
 def nuclear_centroid_actin_overlay(df, image, **kwargs):
     image = image_shuffle(image)
@@ -733,129 +837,3 @@ def xy_segmentation(df, image, **kwargs):
         df.to_csv(save_name + '.csv')
 
     return np.mean(cell_areas), np.mean(cell_perimeters), np.mean(cell_circularities)
-
-
-# Error at 'minlayerheight' parameter
-'''
-def fake_layers(**kwargs):
-    plot = kwargs.get('plot', False)
-    save_name = kwargs.get('save_name', False)
-    fake_type = kwargs.get('fake_type', False)
-    np.random.seed(42)
-
-    underlying_layer = np.random.normal(7, 1, 300)
-    cells_on_top_double = np.random.normal(14, 1, 300)
-    cells_on_top_ball = np.random.normal(24, 5, 700)
-    cells_on_top_mountain = np.random.exponential(10, 700)+12
-        
-    double = np.concatenate([underlying_layer, cells_on_top_double])
-    mountain = np.concatenate([underlying_layer, cells_on_top_mountain])
-    ball = np.concatenate([underlying_layer, cells_on_top_ball])
-    
-
-    
-    if fake_type == False:
-        return "That does not compute."
-    elif fake_type == 'double':
-        zs = double
-        cells_on_top = cells_on_top_double
-    elif fake_type == 'mountain':
-        zs = mountain
-        cells_on_top = cells_on_top_mountain
-    elif fake_type == 'ball':
-        zs = ball
-        cells_on_top = cells_on_top_ball
-    else:
-        return "That does not compute."
-    
-    bins = np.linspace(0, 50, 51)
-    bins_fit = np.linspace(0, 50, 1000)
-    counts, bins_aux = np.histogram(zs, bins = bins)
-    counts_to_fit = smooth_array(counts)
-    
-    peak_height_guess = np.max(counts_to_fit)
-    peak_loc_guess = bins[np.argwhere(counts_to_fit==peak_height_guess)[0][0]]
-            
-            
-    p0_double = [peak_height_guess, peak_loc_guess, 2, 30, 2*peak_loc_guess, 5]
-    p0_single = [peak_height_guess, peak_loc_guess, 2]
-    print(p0_double, p0_single)
-    bounds_double = ([0, 1, 1, 0, 1, 1], [400, 80, 15, 400, 80, 15])
-    bounds_single = ([0, 1, 1], [400, 80, 15])
-    print(bounds_double, bounds_single)
-    peak_loc = np.argwhere(counts_to_fit==np.max(counts_to_fit))[0][0]
-    params_double, params_covariance_double = optimize.curve_fit(double_gaussian_fit, bins[:-1], counts_to_fit, p0_double, bounds = bounds_double)
-    params_single, params_covariance_single = optimize.curve_fit(gaussian_fit, bins[:-1], counts_to_fit, p0_single, bounds = bounds_single)
-    fit_single = gaussian_fit(bins_fit, params_single[0], params_single[1], params_single[2])
-    fit_double = double_gaussian_fit(bins_fit, params_double[0], params_double[1], params_double[2], params_double[3], params_double[4], params_double[5])
-    
-    mean_deviation = np.sqrt(np.mean((fit_single - fit_double)**2))
-    
-    if mean_deviation >5:
-        peaks = 2
-        if params_double[0]>=params_double[3]:
-            tall_peak = params_double[:3]
-            short_peak = params_double[3:]
-        else:
-            tall_peak = params_double[3:] 
-            short_peak = params_double[:3]
-        
-        if params_double[1]<=params_double[4]:
-            left_peak = params_double[:3]
-            right_peak = params_double[3:]
-        else:
-            left_peak = params_double[3:] 
-            right_peak = params_double[:3]
-        
-        a1, b1, c1 = left_peak
-        a2, b2, c2 = right_peak
-    
-        A = 1/c2**2-1/c1**2
-        B = 2*b1/c1**2-2*b2/c2**2
-        C = (b2/c2)**2-(b1/c1)**2+np.log(a1/a2)
-    
-        roots = np.roots([A,B,C])
-        intersection = np.max(gaussian_fit(roots, a1,b1,c1))
-        same_spot_value = intersection / short_peak[0]
-
-        if same_spot_value <= 0.5:
-            layer = 'organized'
-            nuclear_peak = left_peak[1]
-        else:
-            layer = 'disorganized'
-            nuclear_peak = left_peak[1]
-    else:
-        peaks = 1
-        same_spot_value = 'undef'
-        if params_single[2] > -0.372*(params_single[1]-min_layer_height) + 3.572: # ERROR1 no min_layer_height param?
-            layer = 'disorganized'
-            nuclear_peak = params_single[1]
-        else:
-            layer = 'organized'
-            nuclear_peak = params_single[1]
-    print(layer)
-    
-    counts_in, bins_in = np.histogram(underlying_layer, bins = bins)
-    counts_on, bins_on = np.histogram(cells_on_top, bins = bins)
-    
-    if (plot == True or save_name != False):
-        fig, ax = plt.subplots()
-        
-        if peaks == 1:
-            ax.plot(bins_fit, fit_single, label = 'Single Gaussian Fit', linewidth = 3)
-        elif peaks == 2:
-            ax.plot(bins_fit, fit_double, label = 'Double Gaussian Fit', linewidth = 3)
-        else:
-            return 'peaks suck'
-        ax.scatter(bins[:-1], counts_in, label = 'Artificial Layer', c = 'orange')
-        ax.scatter(bins[:-1], counts_on, label = 'Artificial Cells on Top', c = 'g')
-        
-        ax.legend(loc = 'upper right')
-        ax.set_ylabel('Number of nuclei')
-        ax.set_xlabel('Z Position ($\mu$m)')
-        ax.set_xlim(0, 50)
-        fig.show
-        
-        if save_name != False:
-            plt.savefig(save_name + '.pdf', bbox_inches = 'tight', pad_inches = 1)
-'''
