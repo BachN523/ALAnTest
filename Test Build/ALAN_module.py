@@ -134,7 +134,7 @@ def clear_debris(df, **kwargs):
         ax.set_ylabel('Number of cells')
         ax.set_xlabel('Nucleus volume ($\mu$m$^3$)')
         ax.axvline(x=bottom_vol, c='k', linestyle='--')
-        fig.show
+        # fig.show
         if save_name != False:
             plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
     return (df_cleared)
@@ -149,6 +149,7 @@ def layer_height_actin(df, image, **kwargs):
     section = kwargs.get('section', (False, False, False, False))
     invert = kwargs.get('invert', False)
     bottom, top, left, right = section
+    print_data = kwargs.get('print_data', True)
 
     if top == False:
         xy_proj_actin = np.sum(np.sum(image, axis=3), axis=2)[:, actin_channel].copy()
@@ -172,7 +173,8 @@ def layer_height_actin(df, image, **kwargs):
     else:
         bot_cutoff = 0.5 - 0.3 * (density - 2) / 4
         top_cutoff = 0.6 + 0.2 * (density - 2) / 4
-    print(density, bot_cutoff, top_cutoff)
+    if print_data:
+        print("layer_height_actin", density, bot_cutoff, top_cutoff)
     min_actin_slice = np.argwhere(norm_intensities_actin >= bot_cutoff)[0][0]
     max_actin_slice = np.argwhere(norm_intensities_actin >= top_cutoff)[-1][0]
     min_layer_height = slice_heights[min_actin_slice]
@@ -210,13 +212,14 @@ def find_shoulders(df, image, **kwargs):
     actin_channel = kwargs.get('actin_channel', 1)
     section = kwargs.get('section', (False, False, False, False))
     invert = kwargs.get('invert', False)
+    print_data = kwargs.get('print_data', True)
     bottom, top, left, right = section
 
     x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
     min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(df, image,
                                                                                                               actin_channel=actin_channel,
                                                                                                               invert=invert,
-                                                                                                              section=section)
+                                                                                                              section=section, print_data = print_data)
 
     if top == False:
         xy_proj_actin = np.sum(np.sum(image, axis=3), axis=2)[:, actin_channel].copy()
@@ -257,7 +260,7 @@ def find_shoulders(df, image, **kwargs):
         ax2.set_ylabel('Actin Profile 1$^{st}$ Derivative (A.U. / $\mu$m)', labelpad=10)
 
         fig.tight_layout()
-        fig.show()
+        # fig.show()
         if save_name != False:
             plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
 
@@ -278,13 +281,14 @@ def nuclei_distribution(df, image, **kwargs):
     section = kwargs.get('section', (False, False, False, False))
     invert = kwargs.get('invert', False)
     actin_channel = kwargs.get('actin_channel', 1)
+    print_data = kwargs.get('print_data', True)
     bottom, top, left, right = section
     x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
     min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(df, image,
                                                                                                               actin_channel=actin_channel,
                                                                                                               invert=invert,
-                                                                                                              section=section)
-
+                                                                                                              section=section, print_data = print_data)
+    
     if top != False:
         xlow = (x_max - x_min) * left / 512 + x_min
         xhigh = (x_max - x_min) * right / 512 + x_min
@@ -311,10 +315,12 @@ def nuclei_distribution(df, image, **kwargs):
 
     p0_double = [peak_height_guess, peak_loc_guess, 2, 30, 2 * peak_loc_guess, 5]
     p0_single = [peak_height_guess, peak_loc_guess, 2]
-    print(p0_double, p0_single)
+    if print_data:
+        print(p0_double, p0_single)
     bounds_double = ([0, 1, 1, 0, 1, 1], [400, 80, 15, 400, 80, 15])
     bounds_single = ([0, 1, 1], [400, 80, 15])
-    print(bounds_double, bounds_single)
+    if print_data:
+        print(bounds_double, bounds_single)
     peak_loc = np.argwhere(counts_to_fit == np.max(counts_to_fit))[0][0]
     params_double, params_covariance_double = optimize.curve_fit(double_gaussian_fit, bins[:-1], counts_to_fit,
                                                                  p0_double, bounds=bounds_double)
@@ -368,7 +374,8 @@ def nuclei_distribution(df, image, **kwargs):
         else:
             layer = 'organized'
             nuclear_peak = params_single[1]
-    print(params_double, params_single, peak_loc_guess)
+    if print_data:
+        print("nuclei_distribution", params_double, params_single, peak_loc_guess)
 
     if (plot == True or save_name != False):
         fig, ax = plt.subplots()
@@ -401,7 +408,7 @@ def nuclei_distribution(df, image, **kwargs):
         # Adjust layout to ensure everything fits
         fig.tight_layout()
         
-        fig.show
+        # fig.show
 
 
 
@@ -459,22 +466,23 @@ def terrain_map(df, image, **kwargs):
     if save_name != False:
         plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
     
-    plt.show()
+    # plt.show()
     return
 
 def layer_determination(df, image, **kwargs):
     section = kwargs.get('section', (False, False, False, False))
     invert = kwargs.get('invert', False)
     actin_channel = kwargs.get('actin_channel', 1)
+    print_data = kwargs.get('print_data', True)
     bottom, top, left, right = section
 
     x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
     min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(df, image,
                                                                                                               actin_channel=actin_channel,
                                                                                                               invert=invert,
-                                                                                                              section=section)
-    equivalence, num_peaks = find_shoulders(df, image, actin_channel=actin_channel, invert=invert, section=section)
-    nuclear_peak, layer = nuclei_distribution(df, image, actin_channel=actin_channel, invert=invert, section=section)
+                                                                                                              section=section, print_data = print_data)
+    equivalence, num_peaks = find_shoulders(df, image, actin_channel=actin_channel, invert=invert, section=section, print_data = print_data)
+    nuclear_peak, layer = nuclei_distribution(df, image, actin_channel=actin_channel, invert=invert, section=section, print_data = print_data)
 
     if top != False:
         xlow = (x_max - x_min) * left / 512 + x_min
@@ -513,7 +521,8 @@ def layer_determination(df, image, **kwargs):
                 layer_classification = 'Mature'
         else:
             layer_classification = 'Immature'
-    print(layer_height)
+    if print_data:
+        print("layer_determination", layer_height)
 
     return layer_classification, cells_above, cells_inside, percentage_above, cell_density
 
@@ -527,17 +536,16 @@ def sub_classify(df, image, **kwargs):
     invert = kwargs.get('invert', False)
     actin_channel = kwargs.get('actin_channel', 1)
     image = image_shuffle(image)
-    sub_image = image[:, :, :-2, :-2].copy()
+    # sub_image = image[:, :, :-2, :-2].copy()
     sampling = kwargs.get('Sampling', 'Grid')
-    df_cleared = clear_debris(df)
+    # df_cleared = clear_debris(df)
     x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
     min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(
-        df, image, actin_channel=actin_channel, invert=invert)
+        df, image, actin_channel=actin_channel, invert=invert, print_data = False)
     layer_classification, cells_above, cells_inside, percentage_above, cell_density = layer_determination(
-        df, image, actin_channel=actin_channel, invert=invert)
+        df, image, actin_channel=actin_channel, invert=invert, print_data = False)
     full_x = (x_max - x_min) * 500 / 512
     full_y = (y_max - y_min) * 500 / 512
-
     if sampling == 'Grid':
         classification_counts = {'Disorganized': 0, 'Mature': 0, 'Intermediate B': 0, 'Intermediate A': 0, 'Immature': 0}
         xs = np.linspace(x_min + full_x / 10, x_min + 9 * full_x / 10, 5)
@@ -555,8 +563,8 @@ def sub_classify(df, image, **kwargs):
                 int(bounds[i, 0]), int(bounds[i, 0] + 100),
                 int(bounds[i, 1]), int(bounds[i, 1] + 100)
             )
-            a, b, c, d, e = layer_determination(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds)
-            f, g, h, j, k = layer_height_actin(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds)
+            a, b, c, d, e = layer_determination(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds, print_data = False) # Was spamprinting here
+            f, g, h, j, k = layer_height_actin(df, image, actin_channel=actin_channel, invert=invert, section=section_bounds, print_data = False) # 
             all_sections_analyzed.append((a, b, c, h, layer_classification))
             if a in classification_counts:
                 classification_counts[a] += 1
@@ -584,7 +592,7 @@ def sub_classify(df, image, **kwargs):
         
         # Plotting the heatmap
         if plot or save_name:
-            fig = plt.figure(figsize=(12, 10))
+            fig = plt.figure(figsize=(4, 3))
             gs = gridspec.GridSpec(1, 2, width_ratios=[4, 1])  # Adjust ratio as needed
 
             # Heatmap
@@ -598,109 +606,20 @@ def sub_classify(df, image, **kwargs):
             legend_patches = [patches.Patch(color=color, label=label) for label, color in zip(legend_order, legend_colors)]
 
             # Creating legend
-            ax1.legend(handles=legend_patches, loc='upper left', fontsize=25, title='Classification', title_fontsize=25, bbox_to_anchor=(0.0, 0.9))
+            ax1.legend(handles=legend_patches, loc='upper left', fontsize=10, title='Classification', title_fontsize=10, bbox_to_anchor=(0.0, 0.9))
             ax1.axis('off')  # Hide the axis for the legend plot
 
             fig.tight_layout()
             if save_name:
                 plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
-            plt.show()
+            # plt.show()
 
     elif sampling == 'Random':
         raise NotImplementedError('Random sampling method is not yet supported.')
     else:
         raise ValueError('Unknown sampling method: {}'.format(sampling))
     
-    return all_sections_analyzed
-
-
-'''
-
-
-def sub_classify(df, image, **kwargs):
-    plot = kwargs.get('plot', False)
-    save_name = kwargs.get('save_name', False)
-    invert = kwargs.get('invert', False)
-    actin_channel = kwargs.get('actin_channel', 1)
-    image = image_shuffle(image)
-    sub_image = image[:, :, :-2, :-2].copy()
-    sampling = kwargs.get('Sampling', 'Grid')
-    df_cleared = clear_debris(df)
-    x_max, y_max, z_max, x_min, y_min, z_min, slice_heights = get_layer_position(df, image)
-    min_layer_height, max_layer_height, layer_height, actin_peak, norm_intensities_actin = layer_height_actin(df, image,
-                                                                                                              actin_channel=actin_channel,
-                                                                                                              invert=invert)
-    layer_classification, cells_above, cells_inside, percentage_above, cell_density = layer_determination(df, image,
-                                                                                                          actin_channel=actin_channel,
-                                                                                                          invert=invert)
-    full_x = (x_max - x_min) * 500 / 512
-    full_y = (y_max - y_min) * 500 / 512
-
-    if sampling == 'Grid':
-        plot_to_make = np.zeros((500, 500))
-        xs = np.linspace(x_min + full_x / 10, x_min + 9 * full_x / 10, 5)
-        ys = np.linspace(y_min + full_y / 10, y_min + 9 * full_y / 10, 5)
-        lts = np.linspace(0, 400, 5)
-        rbs = np.linspace(0, 400, 5)
-        a, b = np.meshgrid(xs, ys)
-        centers = np.vstack((a.ravel(), b.ravel())).transpose()
-        a, b = np.meshgrid(lts, rbs)
-        bounds = np.vstack((a.ravel(), b.ravel())).transpose()
-        all_sections_analyzed = []
-
-        for i in range(len(centers)):
-            a, b, c, d, e = layer_determination(df, image, actin_channel=actin_channel, invert=invert, section=(
-            int(bounds[i, 0]), int(bounds[i, 0] + 100), int(bounds[i, 1]), int(bounds[i, 1] + 100)))
-            f, g, h, j, k = layer_height_actin(df, image, actin_channel=actin_channel, invert=invert, section=(
-            int(bounds[i, 0]), int(bounds[i, 0] + 100), int(bounds[i, 1]), int(bounds[i, 1] + 100)))
-            all_sections_analyzed.append((a, b, c, h, layer_classification))
-
-             # Set plot values based on classification
-            if a == 'Disorganized':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 5
-            elif a == 'Mature':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 4
-            elif a == 'Intermediate B':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 3
-            elif a == 'Intermediate A':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 2
-            elif a == 'Immature':
-                plot_to_make[int(bounds[i, 0]):int(bounds[i, 0] + 100), int(bounds[i, 1]):int(bounds[i, 1] + 100)] = 1
-            else:
-                raise ValueError('Unexpected classification value: {}'.format(a))
-            
-        # Define colors and labels for legend
-        classification_colors = {
-            'Immature': 'lawngreen',
-            'Intermediate A': 'steelblue',
-            'Intermediate B': 'darkturquoise',
-            'Mature': 'forestgreen',
-            'Disorganized': 'orange'
-        }
-        if plot or save_name:
-            fig, ax = plt.subplots()
-            cmap = colors.ListedColormap(list(classification_colors.values()))
-            bounds = np.arange(1, 7) - 0.5
-            norm = colors.BoundaryNorm(bounds, cmap.N)
-            img = ax.imshow(plot_to_make, cmap=cmap, alpha=1, vmin=1, vmax=5)
-            
-            # Create legend handles
-            handles = [lines.Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=10,
-                                    label=label) for label, color in classification_colors.items()]
-            
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.legend(handles=handles, loc='upper right', fontsize=10, title='Classification')
-
-            if save_name:
-                plt.savefig(save_name + '.pdf', bbox_inches='tight', pad_inches=1)
-            plt.show()
-    elif sampling == 'Random':
-        raise NotImplementedError('Random sampling method is not yet supported.')
-    else:
-        raise ValueError('Unknown sampling method: {}'.format(sampling))
-    return all_sections_analyzed
-'''
+    return # all_sections_analyzed # Was this here for debug?
 
 def nuclear_centroid_actin_overlay(df, image, **kwargs):
     image = image_shuffle(image)
@@ -719,7 +638,11 @@ def nuclear_centroid_actin_overlay(df, image, **kwargs):
     real_ys = (df_clear_in_layer['y'] - y_min) * sum_proj_z.shape[1] / (y_max - y_min)
     all_xs = (df['x'] - x_min) * sum_proj_z.shape[0] / (x_max - x_min)
     all_ys = (df['y'] - y_min) * sum_proj_z.shape[1] / (y_max - y_min)
-    print(np.max(sum_proj_z), np.min(sum_proj_z), np.mean(sum_proj_z))
+    
+    print_data = kwargs.get('print_data', True)
+    if print_data:
+        print("nuclear_centroid_actin_overlay", np.max(sum_proj_z), np.min(sum_proj_z), np.mean(sum_proj_z))
+    
     fig, ax = plt.subplots(figsize=(7, 7))
     ax.imshow(sum_proj_z, cmap='Greys', vmin=np.min(sum_proj_z), vmax=np.mean(sum_proj_z) * 2, alpha=0.4)
     ax.scatter(all_xs, all_ys, c='r')
